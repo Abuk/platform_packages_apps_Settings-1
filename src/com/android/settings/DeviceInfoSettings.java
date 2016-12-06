@@ -254,6 +254,67 @@ public class DeviceInfoSettings extends SettingsPreferenceFragment implements In
                     Log.e(LOG_TAG, "Unable to start activity " + intent.toString());
                 }
             }
+
+            } else if (preference.getKey().equals(KEY_BUILD_NUMBER)) {
+            // Don't enable developer options for secondary users.
+            if (!mUm.isAdminUser()) return true;
+
+            // Don't enable developer options until device has been provisioned
+            if (!Utils.isDeviceProvisioned(getActivity())) {
+                return true;
+            }
+
+            if (mUm.hasUserRestriction(UserManager.DISALLOW_DEBUGGING_FEATURES)) {
+                if (mDebuggingFeaturesDisallowedAdmin != null &&
+                        !mDebuggingFeaturesDisallowedBySystem) {
+                    RestrictedLockUtils.sendShowAdminSupportDetailsIntent(getActivity(),
+                            mDebuggingFeaturesDisallowedAdmin);
+                }
+                return true;
+            }
+
+            if (mDevHitCountdown > 0) {
+                mDevHitCountdown--;
+                if (mDevHitCountdown == 0) {
+                    getActivity().getSharedPreferences(DevelopmentSettings.PREF_FILE,
+                            Context.MODE_PRIVATE).edit().putBoolean(
+                                    DevelopmentSettings.PREF_SHOW, true).apply();
+                    if (mDevHitToast != null) {
+                        mDevHitToast.cancel();
+                    }
+                    mDevHitToast = Toast.makeText(getActivity(), R.string.show_dev_on,
+                            Toast.LENGTH_LONG);
+                    mDevHitToast.show();
+                    // This is good time to index the Developer Options
+                    Index.getInstance(
+                            getActivity().getApplicationContext()).updateFromClassNameResource(
+                                    DevelopmentSettings.class.getName(), true, true);
+
+                } else if (mDevHitCountdown > 0
+                        && mDevHitCountdown < (TAPS_TO_BE_A_DEVELOPER-2)) {
+                    if (mDevHitToast != null) {
+                        mDevHitToast.cancel();
+                    }
+                    mDevHitToast = Toast.makeText(getActivity(), getResources().getQuantityString(
+                            R.plurals.show_dev_countdown, mDevHitCountdown, mDevHitCountdown),
+                            Toast.LENGTH_SHORT);
+                    mDevHitToast.show();
+                }
+            } else if (mDevHitCountdown < 0) {
+                if (mDevHitToast != null) {
+                    mDevHitToast.cancel();
+                }
+                mDevHitToast = Toast.makeText(getActivity(), R.string.show_dev_already,
+                        Toast.LENGTH_LONG);
+                mDevHitToast.show();
+            }
+        } else if (preference.getKey().equals(KEY_SECURITY_PATCH)) {
+            if (getPackageManager().queryIntentActivities(preference.getIntent(), 0).isEmpty()) {
+                // Don't send out the intent to stop crash
+                Log.w(LOG_TAG, "Stop click action on " + KEY_SECURITY_PATCH + ": "
+                        + "queryIntentActivities() returns empty" );
+                return true;
+            }
         } else if (preference.getKey().equals(KEY_DEVICE_FEEDBACK)) {
             sendFeedback();
         } else if(preference.getKey().equals(KEY_SYSTEM_UPDATE_SETTINGS)) {
